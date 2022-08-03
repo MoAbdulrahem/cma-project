@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Scandiweb\Test\Setup\Patch\Data;
 
+use Exception;
 use Magento\Catalog\Api\CategoryLinkManagementInterface;
 use Magento\Catalog\Api\Data\ProductInterfaceFactory;
 use Magento\Catalog\Api\ProductRepositoryInterface;
@@ -24,56 +25,57 @@ use Magento\InventoryApi\Api\Data\SourceItemInterfaceFactory;
 use Magento\InventoryApi\Api\SourceItemsSaveInterface;
 use Magento\Store\Model\StoreManagerInterface;
 
-/**
- * Create Migration product class
- */
-
 class AddTestProduct implements DataPatchInterface
 {
     /**
      * @var ModuleDataSetupInterface
      */
-    protected $setup;
+    protected ModuleDataSetupInterface $setup;
 
     /**
      * @var ProductInterfaceFactory
      */
-    protected $productInterfaceFactory;
+    protected ProductInterfaceFactory $productInterfaceFactory;
 
     /**
      * @var ProductRepositoryInterface
      */
-    protected $productRepository;
+    protected ProductRepositoryInterface $productRepository;
 
     /**
      * @var State
      */
-    protected $appState;
+    protected State $appState;
 
     /**
      * @var StoreManagerInterface
      */
-    protected $storeManager;
+    protected StoreManagerInterface $storeManager;
 
     /**
      * @var SourceItemInterfaceFactory
      */
-    protected $sourceItemFactory;
+    protected SourceItemInterfaceFactory $sourceItemFactory;
 
     /**
      * @var SourceItemsSaveInterface
      */
-    protected $sourceItemsSaveInterface;
+    protected SourceItemsSaveInterface $sourceItemsSaveInterface;
 
     /**
      * @var EavSetup
      */
-    protected $eavSetup;
+    protected EavSetup $eavSetup;
 
     /**
      * @var array
      */
-    protected $sourceItems = [];
+    protected array $sourceItems = [];
+
+    /**
+     * @var CategoryLinkManagementInterface
+     */
+    protected CategoryLinkManagementInterface $categoryLink;
 
     /**
      * Migration patch constructor.
@@ -88,18 +90,8 @@ class AddTestProduct implements DataPatchInterface
      * @param EavSetup $eavSetup
      * @param CategoryLinkManagementInterface $categoryLink
      */
-
-    public function __construct(
-        ModuleDataSetupInterface $setup,
-        ProductInterfaceFactory $productInterfaceFactory,
-        ProductRepositoryInterface $productRepository,
-        State $appState,
-        StoreManagerInterface $storeManager,
-        EavSetup $eavSetup,
-        SourceItemInterfaceFactory $sourceItemFactory,
-        SourceItemsSaveInterface $sourceItemsSaveInterface,
-        CategoryLinkManagementInterface $categoryLink
-    ) {
+    public function __construct(ModuleDataSetupInterface $setup, ProductInterfaceFactory $productInterfaceFactory, ProductRepositoryInterface $productRepository, State $appState, StoreManagerInterface $storeManager, EavSetup $eavSetup, SourceItemInterfaceFactory $sourceItemFactory, SourceItemsSaveInterface $sourceItemsSaveInterface, CategoryLinkManagementInterface $categoryLink)
+    {
         $this->appState = $appState;
         $this->productInterfaceFactory = $productInterfaceFactory;
         $this->productRepository = $productRepository;
@@ -112,9 +104,19 @@ class AddTestProduct implements DataPatchInterface
     }
 
     /**
-     * Add new product
+     * {@inheritDoc}
      */
-    public function apply()
+    public static function getDependencies(): array
+    {
+        return [];
+    }
+
+    /**
+     * Add new product
+     * @return void
+     * @throws Exception
+     */
+    public function apply(): void
     {
         $this->appState->emulateAreaCode('adminhtml', [$this, 'execute']);
     }
@@ -126,50 +128,35 @@ class AddTestProduct implements DataPatchInterface
      * @throws NoSuchEntityException
      * @throws ValidationException
      */
-    public function execute()
+    public function execute(): void
     {
         $product = $this->productInterfaceFactory->create();
 
-        if ($product->getIdBySku('test-product')) {
+        if ($product->getIdBySku('test-product2')) {
             return;
         }
 
-        $this->setup->getConnection()->startSetup();
-
         $attributeSetId = $this->eavSetup->getAttributeSetId(Product::ENTITY, 'Default');
-        $websiteIDs = [$this->storeManager->getStore()->getWebsiteId()];
+        $websiteIds = [$this->storeManager->getStore()->getWebsiteId()];
         $product->setTypeId(Type::TYPE_SIMPLE)
-         ->setWebsiteIds($websiteIDs)
-         ->setAttributeSetId($attributeSetId)
-         ->setName('Test Product')
-         ->setUrlKey('testproduct')
-         ->setSku('grip-test-product')
-         ->setPrice(9.99)
-         ->setVisibility(Visibility::VISIBILITY_BOTH)
-         ->setStatus(Status::STATUS_ENABLED)
-         ->setStockData(['use_config_manage_stock' => 0, 'is_qty_decimal' => 0, 'is_in_stock' => 1]);
-
+            ->setWebsiteIds($websiteIds)
+            ->setAttributeSetId($attributeSetId)
+            ->setName('Test Product2')
+            ->setUrlKey('testproduct2')
+            ->setSku('test-product2')
+            ->setPrice(9.99)
+            ->setVisibility(Visibility::VISIBILITY_BOTH)
+            ->setStatus(Status::STATUS_ENABLED)
+            ->setStockData(['use_config_manage_stock' => 1, 'is_qty_decimal' => 0, 'is_in_stock' => 1]);
         $product = $this->productRepository->save($product);
-
         $sourceItemFactory = $this->sourceItemFactory->create();
         $sourceItemFactory->setSourceCode('default');
         $sourceItemFactory->setQuantity(10);
         $sourceItemFactory->setSku($product->getSku());
         $sourceItemFactory->setStatus(SourceItemInterface::STATUS_IN_STOCK);
         $this->sourceItems[] = $sourceItemFactory;
-
         $this->sourceItemsSaveInterface->execute($this->sourceItems);
-
-					$this->categoryLink->assignProductToCategories($product->getSku(), [2]);
-        $this->setup->getConnection()->endSetup();
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public static function getDependencies()
-    {
-        return [];
+        $this->categoryLink->assignProductToCategories($product->getSku(), [2]);
     }
 
     /**
@@ -178,13 +165,5 @@ class AddTestProduct implements DataPatchInterface
     public function getAliases()
     {
         return [];
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public static function getVersion()
-    {
-          return '1.0.1';
     }
 }
